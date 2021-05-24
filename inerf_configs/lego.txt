@@ -1,0 +1,30 @@
+expname = lego_test
+logdir = ./inerf_logs
+basedir = ./logs
+datadir = ./data/nerf_synthetic/lego
+seed = 7
+testskip = 1
+num_queries = 40
+
+debug_render = False
+
+dataset_type = blender
+
+no_batching = True
+
+use_viewdirs = True
+white_bkgd = True
+
+decay_rate = 0.8
+decay_steps = 100
+
+N_samples = 64
+N_importance = 128
+N_rand = 1024
+
+precrop_iters = 500
+precrop_frac = 0.5
+
+half_res = True
+
+sampling_type = interest_region
