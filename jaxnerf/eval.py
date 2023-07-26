@@ -161,7 +161,7 @@ def main(unused_argv):
         f.write("{}".format(np.mean(np.array(lpips_values))))
     if FLAGS.eval_once:
       break
-    if int(step) >= FLAGS.max_steps:
+    if step >= FLAGS.max_steps:
       break
     last_step = step
 

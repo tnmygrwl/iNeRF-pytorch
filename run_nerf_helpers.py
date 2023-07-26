@@ -105,21 +105,19 @@ class NeRF(nn.Module):
             if i in self.skips:
                 h = torch.cat([input_pts, h], -1)
 
-        if self.use_viewdirs:
-            alpha = self.alpha_linear(h)
-            feature = self.feature_linear(h)
-            h = torch.cat([feature, input_views], -1)
-        
-            for i, l in enumerate(self.views_linears):
-                h = self.views_linears[i](h)
-                h = F.relu(h)
+        if not self.use_viewdirs:
+            return self.output_linear(h)
 
-            rgb = self.rgb_linear(h)
-            outputs = torch.cat([rgb, alpha], -1)
-        else:
-            outputs = self.output_linear(h)
+        alpha = self.alpha_linear(h)
+        feature = self.feature_linear(h)
+        h = torch.cat([feature, input_views], -1)
 
-        return outputs    
+        for i, l in enumerate(self.views_linears):
+            h = self.views_linears[i](h)
+            h = F.relu(h)
+
+        rgb = self.rgb_linear(h)
+        return torch.cat([rgb, alpha], -1)    
 
     def load_weights_from_keras(self, weights):
         assert self.use_viewdirs, "Not implemented if use_viewdirs=False"
@@ -237,6 +235,4 @@ def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
     denom = (cdf_g[...,1]-cdf_g[...,0])
     denom = torch.where(denom<1e-5, torch.ones_like(denom), denom)
     t = (u-cdf_g[...,0])/denom
-    samples = bins_g[...,0] + t * (bins_g[...,1]-bins_g[...,0])
-
-    return samples
+    return bins_g[...,0] + t * (bins_g[...,1]-bins_g[...,0])

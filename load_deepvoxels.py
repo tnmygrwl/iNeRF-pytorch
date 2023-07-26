@@ -32,11 +32,7 @@ def load_dv_data(scene='cube', basedir='/data/deepvoxels', testskip=8):
         f = trgt_sidelength / height * f
 
         fx = f
-        if invert_y:
-            fy = -f
-        else:
-            fy = f
-
+        fy = -f if invert_y else f
         # Build the intrinsic matrices
         full_intrinsic = np.array([[fx, 0., cx, 0.],
                                    [0., fy, cy, 0],
@@ -44,6 +40,7 @@ def load_dv_data(scene='cube', basedir='/data/deepvoxels', testskip=8):
                                    [0, 0, 0, 1]])
 
         return full_intrinsic, grid_barycenter, scale, near_plane, world2cam_poses
+
 
 
     def load_pose(filename):
@@ -61,7 +58,7 @@ def load_dv_data(scene='cube', basedir='/data/deepvoxels', testskip=8):
     focal = full_intrinsic[0,0]
     print(H, W, focal)
 
-    
+
     def dir2poses(posedir):
         poses = np.stack([load_pose(os.path.join(posedir, f)) for f in sorted(os.listdir(posedir)) if f.endswith('txt')], 0)
         transf = np.array([
@@ -73,7 +70,7 @@ def load_dv_data(scene='cube', basedir='/data/deepvoxels', testskip=8):
         poses = poses @ transf
         poses = poses[:,:3,:4].astype(np.float32)
         return poses
-    
+
     posedir = os.path.join(deepvoxels_base, 'pose')
     poses = dir2poses(posedir)
     testposes = dir2poses('{}/test/{}/pose'.format(basedir, scene))
@@ -83,28 +80,28 @@ def load_dv_data(scene='cube', basedir='/data/deepvoxels', testskip=8):
 
     imgfiles = [f for f in sorted(os.listdir(os.path.join(deepvoxels_base, 'rgb'))) if f.endswith('png')]
     imgs = np.stack([imageio.imread(os.path.join(deepvoxels_base, 'rgb', f))/255. for f in imgfiles], 0).astype(np.float32)
-    
-    
+
+
     testimgd = '{}/test/{}/rgb'.format(basedir, scene)
     imgfiles = [f for f in sorted(os.listdir(testimgd)) if f.endswith('png')]
     testimgs = np.stack([imageio.imread(os.path.join(testimgd, f))/255. for f in imgfiles[::testskip]], 0).astype(np.float32)
-    
+
     valimgd = '{}/validation/{}/rgb'.format(basedir, scene)
     imgfiles = [f for f in sorted(os.listdir(valimgd)) if f.endswith('png')]
     valimgs = np.stack([imageio.imread(os.path.join(valimgd, f))/255. for f in imgfiles[::testskip]], 0).astype(np.float32)
-    
+
     all_imgs = [imgs, valimgs, testimgs]
     counts = [0] + [x.shape[0] for x in all_imgs]
     counts = np.cumsum(counts)
     i_split = [np.arange(counts[i], counts[i+1]) for i in range(3)]
-    
+
     imgs = np.concatenate(all_imgs, 0)
     poses = np.concatenate([poses, valposes, testposes], 0)
-    
+
     render_poses = testposes
-    
+
     print(poses.shape, imgs.shape)
-    
+
     return imgs, poses, render_poses, [H,W,focal], i_split
 
 

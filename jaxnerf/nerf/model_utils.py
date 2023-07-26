@@ -81,7 +81,7 @@ class MLP(nn.Module):
       condition = condition.reshape([-1, condition.shape[-1]])
       x = jnp.concatenate([bottleneck, condition], axis=-1)
       # Here use 1 extra layer to align with the original nerf model.
-      for i in range(self.net_depth_condition):
+      for _ in range(self.net_depth_condition):
         x = dense_layer(self.net_width_condition)(x)
         x = self.net_activation(x)
     raw_rgb = dense_layer(self.num_rgb_channels)(x).reshape(

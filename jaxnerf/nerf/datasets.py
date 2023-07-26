@@ -71,8 +71,8 @@ class Dataset(threading.Thread):
       self._test_init(args)
     else:
       raise ValueError(
-          "the split argument should be either \"train\" or \"test\", set"
-          "to {} here.".format(split))
+          f'the split argument should be either \"train\" or \"test\", setto {split} here.'
+      )
     self.batch_size = args.batch_size // jax.host_count()
     self.batching = args.batching
     self.render_path = args.render_path
@@ -88,10 +88,7 @@ class Dataset(threading.Thread):
       batch: dict, has "pixels" and "rays".
     """
     x = self.queue.get()
-    if self.split == "train":
-      return utils.shard(x)
-    else:
-      return utils.to_device(x)
+    return utils.shard(x) if self.split == "train" else utils.to_device(x)
 
   def peek(self):
     """Peek at the next training batch or test example without dequeuing it.
@@ -100,16 +97,10 @@ class Dataset(threading.Thread):
       batch: dict, has "pixels" and "rays".
     """
     x = self.queue.queue[0].copy()  # Make a copy of the front of the queue.
-    if self.split == "train":
-      return utils.shard(x)
-    else:
-      return utils.to_device(x)
+    return utils.shard(x) if self.split == "train" else utils.to_device(x)
 
   def run(self):
-    if self.split == "train":
-      next_func = self._next_train
-    else:
-      next_func = self._next_test
+    next_func = self._next_train if self.split == "train" else self._next_test
     while True:
       self.queue.put(next_func())
 
@@ -200,9 +191,7 @@ class Blender(Dataset):
     """Load images from disk."""
     if args.render_path:
       raise ValueError("render_path cannot be used for the blender dataset.")
-    with utils.open_file(
-        path.join(args.data_dir, "transforms_{}.json".format(self.split)),
-        "r") as fp:
+    with utils.open_file(path.join(args.data_dir, f"transforms_{self.split}.json"), "r") as fp:
       meta = json.load(fp)
     images = []
     cams = []
@@ -216,8 +205,8 @@ class Blender(Dataset):
           image = cv2.resize(
               image, (halfres_w, halfres_h), interpolation=cv2.INTER_AREA)
         elif args.factor > 0:
-          raise ValueError("Blender dataset only supports factor=0 or 2, {} "
-                           "set.".format(args.factor))
+          raise ValueError(
+              f"Blender dataset only supports factor=0 or 2, {args.factor} set.")
       cams.append(np.array(frame["transform_matrix"], dtype=np.float32))
       images.append(image)
     self.images = np.stack(images, axis=0)
@@ -243,13 +232,13 @@ class LLFF(Dataset):
     # Load images.
     imgdir_suffix = ""
     if args.factor > 0:
-      imgdir_suffix = "_{}".format(args.factor)
+      imgdir_suffix = f"_{args.factor}"
       factor = args.factor
     else:
       factor = 1
-    imgdir = path.join(args.data_dir, "images" + imgdir_suffix)
+    imgdir = path.join(args.data_dir, f"images{imgdir_suffix}")
     if not utils.file_exists(imgdir):
-      raise ValueError("Image folder {} doesn't exist.".format(imgdir))
+      raise ValueError(f"Image folder {imgdir} doesn't exist.")
     imgfiles = [
         path.join(imgdir, f)
         for f in sorted(utils.listdir(imgdir))
@@ -269,8 +258,9 @@ class LLFF(Dataset):
     poses = poses_arr[:, :-2].reshape([-1, 3, 5]).transpose([1, 2, 0])
     bds = poses_arr[:, -2:].transpose([1, 0])
     if poses.shape[-1] != images.shape[-1]:
-      raise RuntimeError("Mismatch between imgs {} and poses {}".format(
-          images.shape[-1], poses.shape[-1]))
+      raise RuntimeError(
+          f"Mismatch between imgs {images.shape[-1]} and poses {poses.shape[-1]}"
+      )
 
     # Update poses according to downsampling.
     poses[:2, 4, :] = np.array(images.shape[:2]).reshape([2, 1])
@@ -304,10 +294,7 @@ class LLFF(Dataset):
     i_test = np.arange(images.shape[0])[::args.llffhold]
     i_train = np.array(
         [i for i in np.arange(int(images.shape[0])) if i not in i_test])
-    if self.split == "train":
-      indices = i_train
-    else:
-      indices = i_test
+    indices = i_train if self.split == "train" else i_test
     images = images[indices]
     poses = poses[indices]
 
@@ -366,8 +353,7 @@ class LLFF(Dataset):
     center = poses[:, :3, 3].mean(0)
     vec2 = self._normalize(poses[:, :3, 2].sum(0))
     up = poses[:, :3, 1].sum(0)
-    c2w = np.concatenate([self._viewmatrix(vec2, up, center), hwf], 1)
-    return c2w
+    return np.concatenate([self._viewmatrix(vec2, up, center), hwf], 1)
 
   def _viewmatrix(self, z, up, pos):
     """Construct lookat view matrix."""
@@ -375,8 +361,7 @@ class LLFF(Dataset):
     vec1_avg = up
     vec0 = self._normalize(np.cross(vec1_avg, vec2))
     vec1 = self._normalize(np.cross(vec2, vec0))
-    m = np.stack([vec0, vec1, vec2, pos], 1)
-    return m
+    return np.stack([vec0, vec1, vec2, pos], 1)
 
   def _normalize(self, x):
     """Normalization helper function."""

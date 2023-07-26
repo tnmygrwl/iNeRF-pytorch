@@ -63,9 +63,12 @@ def define_flags():
 
   # Dataset Flags
   # TODO(pratuls): rename to dataset_loader and consider cleaning up
-  flags.DEFINE_enum("dataset", "blender",
-                    list(k for k in datasets.dataset_dict.keys()),
-                    "The type of dataset feed to nerf.")
+  flags.DEFINE_enum(
+      "dataset",
+      "blender",
+      list(datasets.dataset_dict.keys()),
+      "The type of dataset feed to nerf.",
+  )
   flags.DEFINE_enum(
       "batching", "single_image", ["single_image", "all_images"],
       "source of ray sampling when collecting training batch,"
@@ -179,12 +182,10 @@ def define_flags():
 
 def update_flags(args):
   """Update the flags in `args` with the contents of the config YAML file."""
-  pth = path.join(BASE_DIR, args.config + ".yaml")
+  pth = path.join(BASE_DIR, f"{args.config}.yaml")
   with open_file(pth, "r") as fin:
     configs = yaml.load(fin, Loader=yaml.FullLoader)
-  # Only allow args to be updated if they already exist.
-  invalid_args = list(set(configs.keys()) - set(dir(args)))
-  if invalid_args:
+  if invalid_args := list(set(configs.keys()) - set(dir(args))):
     raise ValueError(f"Invalid args {invalid_args} in {pth}.")
   args.__dict__.update(configs)
 

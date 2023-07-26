@@ -212,14 +212,14 @@ def construct_nerf(key, example_batch, args):
   rgb = rgb_activation(x)
   if jnp.any(rgb < 0) or jnp.any(rgb > 1):
     raise NotImplementedError(
-        "Choice of rgb_activation `{}` produces colors outside of [0, 1]"
-        .format(args.rgb_activation))
+        f"Choice of rgb_activation `{args.rgb_activation}` produces colors outside of [0, 1]"
+    )
 
   sigma = sigma_activation(x)
   if jnp.any(sigma < 0):
     raise NotImplementedError(
-        "Choice of sigma_activation `{}` produces negative densities".format(
-            args.sigma_activation))
+        f"Choice of sigma_activation `{args.sigma_activation}` produces negative densities"
+    )
 
   model = NerfModel(
       min_deg_point=args.min_deg_point,

@@ -198,7 +198,7 @@ def pose_estimation():
         if args.no_ndc:
             near = np.ndarray.min(bds) * .9
             far = np.ndarray.max(bds) * 1.
-            
+
         else:
             near = 0.
             far = 1.
@@ -228,7 +228,7 @@ def pose_estimation():
     with open(f, 'w') as file:
         for arg in sorted(vars(args)):
             attr = getattr(args, arg)
-            file.write('{} = {}\n'.format(arg, attr))
+            file.write(f'{arg} = {attr}\n')
     f = os.path.join(logdir, expname, args.sampling_type, 'config.txt')
     with open(f, 'w') as file:
         file.write(open(args.config, 'r').read())
@@ -250,7 +250,7 @@ def pose_estimation():
         all_idx = np.array(i_val)
     elif args.dataset_type == 'blender':
         all_idx = np.concatenate((i_val, i_test))
-    
+
     rand_idx = np.random.permutation(all_idx)[:args.num_queries]
     print(args.sampling_type)
     print(rand_idx)
@@ -259,12 +259,12 @@ def pose_estimation():
         T = poses[idx].astype(float) # ground-truth pose
         axis = sample_from_unit_sphere()
         angle = np.random.uniform(-20, 20) * np.pi / 180 # random [-20, 20] degrees
-        if args.dataset_type == 'llff':
-            offset = 0.1 # random [-0.1, 0.1] meters
-        elif args.dataset_type == 'blender':
+        if args.dataset_type == 'blender':
             offset = 0.2 # random [-0.2, 0.2] meters
+        elif args.dataset_type == 'llff':
+            offset = 0.1 # random [-0.1, 0.1] meters
         translation = np.array([np.random.uniform(-offset, offset) for _ in range(3)])
-        
+
         # Converting axis, angle to rotation matrix
         quat = Quaternion(axis=axis, angle=angle)
         T_0_rot = quat.transformation_matrix # 4x4 transformation matrix
@@ -273,8 +273,8 @@ def pose_estimation():
         T_0 = T_0_tran @ T_0_rot
         T_0 = T_0 @ T # initializing T_0 in some vicinity of T
         random_poses.append(T_0)
-        # print(f"Initialization offset: translation: {translation}, rotation: {angle * 180 / np.pi} degrees around {axis}")
-    
+            # print(f"Initialization offset: translation: {translation}, rotation: {angle * 180 / np.pi} degrees around {axis}")
+
     for i, idx in enumerate(list(rand_idx)):
 
         idx_path = os.path.join(logdir, expname, args.sampling_type, str(idx))
@@ -283,13 +283,13 @@ def pose_estimation():
         query = images[idx] # query image
         query_cv2 = query * 255
         query_cv2 = cv2.cvtColor(query_cv2.astype(np.uint8), cv2.COLOR_RGB2BGR)
-        cv2.imwrite(idx_path + '/query.png', query_cv2)
+        cv2.imwrite(f'{idx_path}/query.png', query_cv2)
         query = torch.from_numpy(query).float().to(device)
         T = poses[idx].astype(float) # ground-truth pose
         T_0 = torch.from_numpy(random_poses[i]).float().to(device)
         print(f"Image ID: {idx}")
         print(f"GT Pose: {T}")
-        
+
         '''
         R6 param to SE3 transformation
         '''
@@ -311,69 +311,68 @@ def pose_estimation():
             coords = get_interest_region_pixels(H, W, query, args.N_rand, save_path=idx_path)
 
         f = os.path.join(idx_path, 'log.txt')
-        error_log = open(f, 'w')
-        error_log.write(f"iteration, loss, tran_error, rot_error\n")                            
+        with open(f, 'w') as error_log:
+            error_log.write(f"iteration, loss, tran_error, rot_error\n")                            
 
-        for step in range(args.num_steps):
-            ## compute current camera pose
-            T_i_hat = screwExp(exp_params) @ T_0
-            rays_o, rays_d = get_rays(H, W, focal, T_i_hat[:3, :4]) # (H, W, 3), (H, W, 3)
+            for step in range(args.num_steps):
+                ## compute current camera pose
+                T_i_hat = screwExp(exp_params) @ T_0
+                rays_o, rays_d = get_rays(H, W, focal, T_i_hat[:3, :4]) # (H, W, 3), (H, W, 3)
 
-            # prepare batch of rays to render
-            if args.sampling_type == 'random':
-                select_coords = get_random_pixels(H, W, args.N_rand)
-            elif args.sampling_type == 'interest_region':
-                select_coords = torch.from_numpy(np.random.permutation(coords)[:args.N_rand]).long()
-        
-            
-            rays_o = rays_o[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
-            rays_d = rays_d[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
-            batch_rays = torch.stack([rays_o, rays_d], 0)
-            query_rgb = query[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
+                # prepare batch of rays to render
+                if args.sampling_type == 'random':
+                    select_coords = get_random_pixels(H, W, args.N_rand)
+                elif args.sampling_type == 'interest_region':
+                    select_coords = torch.from_numpy(np.random.permutation(coords)[:args.N_rand]).long()
 
-            '''
+
+                rays_o = rays_o[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
+                rays_d = rays_d[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
+                batch_rays = torch.stack([rays_o, rays_d], 0)
+                query_rgb = query[select_coords[:, 0], select_coords[:, 1]]  # (N_rand, 3)
+
+                '''
             Render to optimize
             '''
-            rgb, _, _, _ = render(H, W, focal, chunk=args.chunk, rays=batch_rays,
-                                                    retraw=True,
-                                                    **render_kwargs_test)
-            optimizer.zero_grad()
-            img_loss = img2mse(rgb, query_rgb)
-            loss = img_loss
-            loss.backward()
-            optimizer.step()
-            ###   update learning rate   ###
-            # The learning rate at step t is set as follow α_t = α_0 * 0.8^(t/100)
-            new_lrate = lrate * (args.decay_rate ** (step / args.decay_steps))
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = new_lrate
+                rgb, _, _, _ = render(H, W, focal, chunk=args.chunk, rays=batch_rays,
+                                                        retraw=True,
+                                                        **render_kwargs_test)
+                optimizer.zero_grad()
+                img_loss = img2mse(rgb, query_rgb)
+                loss = img_loss
+                loss.backward()
+                optimizer.step()
+                ###   update learning rate   ###
+                # The learning rate at step t is set as follow α_t = α_0 * 0.8^(t/100)
+                new_lrate = lrate * (args.decay_rate ** (step / args.decay_steps))
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = new_lrate
 
-            '''
+                '''
             Save Renders and Error logs
             '''
-            if step % 10 == 0:
-                # save sampling mask
-                # sampled_pixels = np.zeros((H, W)).astype("uint8")
-                # select_coords = select_coords.cpu().detach().numpy()
-                # sampled_pixels[select_coords[:, 0], select_coords[:, 1]] = 255
-                # imageio.imwrite(idx_path + '/m_' + str(step) + '.png', sampled_pixels) 
+                if step % 10 == 0:
+                                    # save sampling mask
+                                    # sampled_pixels = np.zeros((H, W)).astype("uint8")
+                                    # select_coords = select_coords.cpu().detach().numpy()
+                                    # sampled_pixels[select_coords[:, 0], select_coords[:, 1]] = 255
+                                    # imageio.imwrite(idx_path + '/m_' + str(step) + '.png', sampled_pixels) 
 
-                # save full-render from the current camera pose
-                if args.debug_render:
-                    with torch.no_grad():
-                        rgb, _, _, _ = render(H, W, focal, chunk=args.chunk, c2w=T_i_hat[:3, :4], **render_kwargs_test)
-                    rgb_cv2 = rgb.cpu().numpy() * 255
-                    rgb_cv2 = cv2.cvtColor(rgb_cv2.astype(np.uint8), cv2.COLOR_RGB2BGR)
-                    cv2.imwrite(idx_path + '/' + str(step) +'.png', rgb_cv2)
+                                    # save full-render from the current camera pose
+                    if args.debug_render:
+                        with torch.no_grad():
+                            rgb, _, _, _ = render(H, W, focal, chunk=args.chunk, c2w=T_i_hat[:3, :4], **render_kwargs_test)
+                        rgb_cv2 = rgb.cpu().numpy() * 255
+                        rgb_cv2 = cv2.cvtColor(rgb_cv2.astype(np.uint8), cv2.COLOR_RGB2BGR)
+                        cv2.imwrite(f'{idx_path}/{str(step)}.png', rgb_cv2)
 
-            # current camera pose
-            T_i_hat = T_i_hat.detach().cpu().numpy()
-            # check pose error
-            tran_err, rot_err = get_pose_error(T_i_hat, T)
-            # print(f"iteration {step}, loss: {loss.cpu().detach().numpy()}, tran error: {tran_err}, rot error: {rot_err}")
-            error_log.write(f"{step}, {loss.cpu().detach().numpy()}, {tran_err}, {rot_err}\n")                       
-            error_log.flush()
-        error_log.close() 
+                # current camera pose
+                T_i_hat = T_i_hat.detach().cpu().numpy()
+                # check pose error
+                tran_err, rot_err = get_pose_error(T_i_hat, T)
+                # print(f"iteration {step}, loss: {loss.cpu().detach().numpy()}, tran error: {tran_err}, rot error: {rot_err}")
+                error_log.write(f"{step}, {loss.cpu().detach().numpy()}, {tran_err}, {rot_err}\n")
+                error_log.flush() 
 
 if __name__=='__main__':
     torch.set_default_tensor_type("torch.cuda.FloatTensor")

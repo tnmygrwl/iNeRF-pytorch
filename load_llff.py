@@ -8,51 +8,57 @@ import os, imageio
 def _minify(basedir, factors=[], resolutions=[]):
     needtoload = False
     for r in factors:
-        imgdir = os.path.join(basedir, 'images_{}'.format(r))
+        imgdir = os.path.join(basedir, f'images_{r}')
         if not os.path.exists(imgdir):
             needtoload = True
     for r in resolutions:
-        imgdir = os.path.join(basedir, 'images_{}x{}'.format(r[1], r[0]))
+        imgdir = os.path.join(basedir, f'images_{r[1]}x{r[0]}')
         if not os.path.exists(imgdir):
             needtoload = True
     if not needtoload:
         return
-    
+
     from shutil import copy
     from subprocess import check_output
-    
+
     imgdir = os.path.join(basedir, 'images')
     imgs = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir))]
-    imgs = [f for f in imgs if any([f.endswith(ex) for ex in ['JPG', 'jpg', 'png', 'jpeg', 'PNG']])]
+    imgs = [
+        f
+        for f in imgs
+        if any(f.endswith(ex) for ex in ['JPG', 'jpg', 'png', 'jpeg', 'PNG'])
+    ]
     imgdir_orig = imgdir
-    
+
     wd = os.getcwd()
 
     for r in factors + resolutions:
         if isinstance(r, int):
-            name = 'images_{}'.format(r)
-            resizearg = '{}%'.format(100./r)
+            name = f'images_{r}'
+            resizearg = f'{100.0 / r}%'
         else:
-            name = 'images_{}x{}'.format(r[1], r[0])
-            resizearg = '{}x{}'.format(r[1], r[0])
+            name = f'images_{r[1]}x{r[0]}'
+            resizearg = f'{r[1]}x{r[0]}'
         imgdir = os.path.join(basedir, name)
         if os.path.exists(imgdir):
             continue
-            
+
         print('Minifying', r, basedir)
-        
+
         os.makedirs(imgdir)
-        check_output('cp {}/* {}'.format(imgdir_orig, imgdir), shell=True)
-        
+        check_output(f'cp {imgdir_orig}/* {imgdir}', shell=True)
+
         ext = imgs[0].split('.')[-1]
-        args = ' '.join(['mogrify', '-resize', resizearg, '-format', 'png', '*.{}'.format(ext)])
+        args = ' '.join(
+            ['mogrify', '-resize', resizearg, '-format', 'png', f'*.{ext}']
+        )
         print(args)
         os.chdir(imgdir)
         check_output(args, shell=True)
         os.chdir(wd)
-        
+
         if ext != 'png':
-            check_output('rm {}/*.{}'.format(imgdir, ext), shell=True)
+            check_output(f'rm {imgdir}/*.{ext}', shell=True)
             print('Removed duplicates')
         print('Done')
             
@@ -64,13 +70,13 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
     poses_arr = np.load(os.path.join(basedir, 'poses_bounds.npy'))
     poses = poses_arr[:, :-2].reshape([-1, 3, 5]).transpose([1,2,0])
     bds = poses_arr[:, -2:].transpose([1,0])
-    
+
     img0 = [os.path.join(basedir, 'images', f) for f in sorted(os.listdir(os.path.join(basedir, 'images'))) \
             if f.endswith('JPG') or f.endswith('jpg') or f.endswith('png')][0]
     sh = imageio.imread(img0).shape
-    
+
     sfx = ''
-    
+
     if factor is not None:
         sfx = '_{}'.format(factor)
         _minify(basedir, factors=[factor])
@@ -87,33 +93,33 @@ def _load_data(basedir, factor=None, width=None, height=None, load_imgs=True):
         sfx = '_{}x{}'.format(width, height)
     else:
         factor = 1
-    
-    imgdir = os.path.join(basedir, 'images' + sfx)
+
+    imgdir = os.path.join(basedir, f'images{sfx}')
     if not os.path.exists(imgdir):
         print( imgdir, 'does not exist, returning' )
         return
-    
+
     imgfiles = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('JPG') or f.endswith('jpg') or f.endswith('png')]
     if poses.shape[-1] != len(imgfiles):
         print( 'Mismatch between imgs {} and poses {} !!!!'.format(len(imgfiles), poses.shape[-1]) )
         return
-    
+
     sh = imageio.imread(imgfiles[0]).shape
     poses[:2, 4, :] = np.array(sh[:2]).reshape([2, 1])
     poses[2, 4, :] = poses[2, 4, :] * 1./factor
-    
+
     if not load_imgs:
         return poses, bds
-    
+
     def imread(f):
         if f.endswith('png'):
             return imageio.imread(f, ignoregamma=True)
         else:
             return imageio.imread(f)
-        
+
     imgs = imgs = [imread(f)[...,:3]/255. for f in imgfiles]
     imgs = np.stack(imgs, -1)  
-    
+
     print('Loaded image data', imgs.shape, poses[:,-1,0])
     return poses, bds, imgs
 
@@ -130,12 +136,10 @@ def viewmatrix(z, up, pos):
     vec1_avg = up
     vec0 = normalize(np.cross(vec1_avg, vec2))
     vec1 = normalize(np.cross(vec2, vec0))
-    m = np.stack([vec0, vec1, vec2, pos], 1)
-    return m
+    return np.stack([vec0, vec1, vec2, pos], 1)
 
 def ptstocam(pts, c2w):
-    tt = np.matmul(c2w[:3,:3].T, (pts-c2w[:3,3])[...,np.newaxis])[...,0]
-    return tt
+    return np.matmul(c2w[:3,:3].T, (pts-c2w[:3,3])[...,np.newaxis])[...,0]
 
 def poses_avg(poses):
 
@@ -144,9 +148,7 @@ def poses_avg(poses):
     center = poses[:, :3, 3].mean(0)
     vec2 = normalize(poses[:, :3, 2].sum(0))
     up = poses[:, :3, 1].sum(0)
-    c2w = np.concatenate([viewmatrix(vec2, up, center), hwf], 1)
-    
-    return c2w
+    return np.concatenate([viewmatrix(vec2, up, center), hwf], 1)
 
 
 

@@ -9,7 +9,7 @@ folder = './inerf_logs/fern_test/random/10/'
 savedir = './imgs/fern/'
 
 def superimpose():
-    query_path = folder + 'query.png'
+    query_path = f'{folder}query.png'
     query = imageio.imread(query_path)
     images = []
     for i in range(0,300,10):
@@ -17,11 +17,11 @@ def superimpose():
         curr = imageio.imread(path)
         rgb = curr*0.5 + query*0.5
         images.append(rgb.astype(np.uint8))
-        imageio.imwrite(savedir + str(i) + '.png', rgb.astype(np.uint8)) 
-    imageio.mimsave(savedir + 'fern.gif', images, duration=0.1)
+        imageio.imwrite(savedir + str(i) + '.png', rgb.astype(np.uint8))
+    imageio.mimsave(f'{savedir}fern.gif', images, duration=0.1)
 
 def plot():
-    for exp_path in glob.glob(datadir + '/*/'):
+    for exp_path in glob.glob(f'{datadir}/*/'):
         exp_name = exp_path.split('/')[-2]
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14,5))
         # fig.suptitle(exp_name.split('_')[0])
@@ -29,19 +29,19 @@ def plot():
         ax1.set_ylabel('Avg. Translation Error', fontsize=14)
         ax2.set_xlabel('Number of Steps', fontsize=14)
         ax2.set_ylabel('Avg. of Rotation Error', fontsize=14)
-        
-        for sampling_path in glob.glob(exp_path + '/*/'):
+
+        for sampling_path in glob.glob(f'{exp_path}/*/'):
             sampling_type = sampling_path.split('/')[-2]
             rot_error_matrix = []
             tran_error_matrix = []
-            for txt_file in glob.glob(sampling_path + '/*/*.txt'):
+            for txt_file in glob.glob(f'{sampling_path}/*/*.txt'):
                 tran_error, rot_error = np.loadtxt(txt_file, delimiter=', ', skiprows=1, usecols=(2, 3), unpack=True)
                 if len(tran_error) == 300:
                     tran_error_matrix.append(tran_error)
                     rot_error_matrix.append(rot_error)
                 else:
                     print(txt_file)
-            
+
             tran_error_matrix = np.stack(tran_error_matrix)
             rot_error_matrix = np.stack(rot_error_matrix)
             print(tran_error_matrix.shape, rot_error_matrix.shape)
@@ -56,7 +56,7 @@ def plot():
             ax2.plot(steps, frac_rot_error, label=sampling_type)
             ax2.legend(fontsize=14)
 
-        fig.savefig(exp_path + 'plot.png')
+        fig.savefig(f'{exp_path}plot.png')
 
 plot()
 # superimpose()

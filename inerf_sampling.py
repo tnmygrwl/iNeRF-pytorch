@@ -9,9 +9,7 @@ def get_random_pixels(H, W, N_rand):
     coords = torch.stack(torch.meshgrid(torch.linspace(0, H-1, H), torch.linspace(0, W-1, W)), -1)  # (H, W, 2)
     coords = torch.reshape(coords, [-1,2])  # (H * W, 2)
     select_inds = np.random.choice(coords.shape[0], size=[N_rand], replace=False)  # (N_rand,)
-    select_coords = coords[select_inds].long()  # (N_rand, 2)
-
-    return select_coords
+    return coords[select_inds].long()
 
 def get_interest_region_pixels(H, W, query, N_rand, save_path):
     '''
@@ -26,18 +24,18 @@ def get_interest_region_pixels(H, W, query, N_rand, save_path):
 
     key_regions = cv2.drawKeypoints(query_features, keypoints, None, color=(0, 0, 255))
     if save_path is not None:
-        cv2.imwrite(save_path + '/key_regions.png', key_regions)
+        cv2.imwrite(f'{save_path}/key_regions.png', key_regions)
 
     mask = np.zeros((H, W)).astype("uint8")
     for kp in keypoints:
         mask[int(kp.pt[1]), int(kp.pt[0])] = 255
     kernel = np.ones((5,5))
     dil_iterations = 3
-    for i in range(dil_iterations):
+    for _ in range(dil_iterations):
         mask = cv2.dilate(mask, kernel)
 
     if save_path is not None:
-        cv2.imwrite(save_path + '/region_mask.png', mask)
+        cv2.imwrite(f'{save_path}/region_mask.png', mask)
     coords = np.argwhere(mask > 0)
     np.random.shuffle(coords)
 

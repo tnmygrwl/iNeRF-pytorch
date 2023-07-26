@@ -47,8 +47,9 @@ def run_network(inputs, viewdirs, fn, embed_fn, embeddirs_fn, netchunk=1024*64):
         embedded = torch.cat([embedded, embedded_dirs], -1)
 
     outputs_flat = batchify(fn, netchunk)(embedded)
-    outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
-    return outputs
+    return torch.reshape(
+        outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]]
+    )
 
 
 def batchify_rays(rays_flat, chunk=1024*32, **kwargs):
@@ -62,8 +63,7 @@ def batchify_rays(rays_flat, chunk=1024*32, **kwargs):
                 all_ret[k] = []
             all_ret[k].append(ret[k])
 
-    all_ret = {k : torch.cat(all_ret[k], 0) for k in all_ret}
-    return all_ret
+    return {k : torch.cat(all_ret[k], 0) for k in all_ret}
 
 
 def render(H, W, focal, chunk=1024*32, rays=None, c2w=None, ndc=True,
@@ -92,13 +92,7 @@ def render(H, W, focal, chunk=1024*32, rays=None, c2w=None, ndc=True,
       acc_map: [batch_size]. Accumulated opacity (alpha) along a ray.
       extras: dict with everything returned by render_rays().
     """
-    if c2w is not None:
-        # special case to render full image
-        rays_o, rays_d = get_rays(H, W, focal, c2w)
-    else:
-        # use provided ray batch
-        rays_o, rays_d = rays
-
+    rays_o, rays_d = get_rays(H, W, focal, c2w) if c2w is not None else rays
     if use_viewdirs:
         # provide ray directions as input
         viewdirs = rays_d
@@ -219,7 +213,7 @@ def create_nerf(args):
         ckpts = [os.path.join(basedir, expname, f) for f in sorted(os.listdir(os.path.join(basedir, expname))) if 'tar' in f]
 
     print('Found ckpts', ckpts)
-    if len(ckpts) > 0 and not args.no_reload:
+    if ckpts and not args.no_reload:
         ckpt_path = ckpts[-1]
         print('Reloading from', ckpt_path)
         ckpt = torch.load(ckpt_path)
